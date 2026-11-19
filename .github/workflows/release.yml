@@ -25,7 +25,7 @@ jobs:
             os=${target%/*} arch=${target#*/}
             name=stowl-$GITHUB_REF_NAME-$os-$arch
             GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w" -o "dist/$name/stowl$([ "$os" = windows ] && echo .exe)" ./cmd/stowl
-            cp README.md "dist/$name/"
+            cp README.md LICENSE "dist/$name/"
             if [ "$os" = windows ]; then
               (cd dist && zip -qr "$name.zip" "$name")
             else

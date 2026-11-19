@@ -76,3 +76,7 @@ Pushing a `v*` tag builds the release binaries (`.github/workflows/release.yml`)
 | `docker.go` | everything that runs the `docker` CLI |
 | `detail.go` | inspect sections |
 | `logs.go` | log streaming and highlighting |
+
+## License
+
+[MIT](LICENSE)
