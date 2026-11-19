@@ -59,9 +59,10 @@ var pruneMenu = []item{
 
 // rowRef says what a table row stands for.
 type rowRef struct {
-	key     string // identity of the thing; a container's extra port lines share its key
+	key     string // identity of the row; a container's extra port lines add their port to its key
 	item    int    // index into model.shown, -1 for a project heading
 	project string
+	port    table.Row // {container port, listener} on a container's rows, as portLines gives them
 }
 
 // action is a docker command waiting on a y/n answer.
@@ -456,13 +457,21 @@ func (m model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				return m, interactive("shell in "+name, "docker", "exec", "-it", id, "sh", "-c", "command -v bash >/dev/null && exec bash || exec sh")
+			case "o": // the port under the cursor; on the container's own row, its first
+				url, err := portURL(m.rows[m.table.Cursor()].port)
+				if err != nil {
+					m.say(name+": "+err.Error(), true)
+					return m, nil
+				}
+				return m, openBrowser(url)
 			}
 		}
 	}
-	prev := m.table.Cursor()
 	var cmd tea.Cmd
 	m.table, cmd = m.table.Update(msg)
-	m.snap(prev)
+	if c := m.table.Cursor(); c >= 0 && c < len(m.rows) {
+		m.selKey = m.rows[c].key
+	}
 	m.setRows() // the cursor may have moved; recolor around it
 	return m, tea.Batch(cmd, m.previewCmd())
 }

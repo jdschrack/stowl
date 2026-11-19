@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -142,6 +143,21 @@ func run(label string, args ...string) tea.Cmd {
 // interactive hands the terminal to a child process until it exits.
 func interactive(label, name string, args ...string) tea.Cmd {
 	return tea.ExecProcess(exec.Command(name, args...), func(err error) tea.Msg { return doneMsg{label, err} })
+}
+
+// openBrowser opens url with the system's default handler. Its output goes nowhere, so it
+// cannot scribble over the UI.
+func openBrowser(url string) tea.Cmd {
+	return func() tea.Msg {
+		name, args := "xdg-open", []string{url}
+		switch runtime.GOOS {
+		case "darwin":
+			name = "open"
+		case "windows":
+			name, args = "rundll32", []string{"url.dll,FileProtocolHandler", url}
+		}
+		return doneMsg{"open " + url, exec.Command(name, args...).Run()}
+	}
 }
 
 func df() tea.Msg {

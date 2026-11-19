@@ -163,7 +163,7 @@ func TestGroupingAndCursor(t *testing.T) {
 		t.Errorf("an IPv6 twin should fold away, a lone IPv6 mapping stay: %q", got)
 	}
 	m := containers()
-	if got := rowKeys(m); got != "x project:shop d w w" {
+	if got := rowKeys(m); got != "x project:shop d w w 90/tcp" {
 		t.Fatalf("rows = %q", got)
 	}
 	if cell := m.table.Rows()[1]; !strings.Contains(cell[0], "shop") || !strings.Contains(cell[2], "1/2 running") {
@@ -216,13 +216,32 @@ func TestGroupingAndCursor(t *testing.T) {
 		t.Error("e on a stopped container should only say so")
 	}
 
-	// Arrowing down onto web's second port line skips past it; with nothing below, it stays on web.
+	// Every port line is selectable, and o opens the port under the cursor.
+	for c, want := range map[int]string{3: "http://1.1.1.1:80", 4: "90/tcp is not published"} {
+		m.table.SetCursor(c)
+		url, err := portURL(m.rows[c].port)
+		if it, _, _ := m.sel(); it["ID"] != "w" || (url != want && (err == nil || err.Error() != want)) {
+			t.Errorf("row %d: %v %q %v, want web and %q", c, it["ID"], url, err, want)
+		}
+	}
+	for p, want := range map[string]string{
+		"0.0.0.0:8080->80/tcp":               "http://localhost:8080",
+		"[::]:8443->443/tcp":                 "https://localhost:8443",
+		"127.0.0.1:9000-9001->9000-9001/tcp": "http://127.0.0.1:9000",
+		"0.0.0.0:53->53/udp":                 "",
+	} {
+		if got, _ := portURL(portLines(p)[0]); got != want {
+			t.Errorf("portURL(%q) = %q, want %q", p, got, want)
+		}
+	}
+	m.table.SetCursor(2)
+	if mm, cmd := m.key(tea.KeyPressMsg{Code: 'o', Text: "o"}); cmd != nil || !mm.(model).statusErr {
+		t.Error("o on a container without ports should only say so")
+	}
 	m.table.SetCursor(3)
-	m.snap(2)
-	m.table.SetCursor(4)
-	m.snap(3)
-	if it, _, _ := m.sel(); m.table.Cursor() != 3 || it["ID"] != "w" {
-		t.Errorf("cursor = %d, want web's first row", m.table.Cursor())
+	m.selKey = "w"
+	if mm, _ := m.key(tea.KeyPressMsg{Code: tea.KeyDown}); mm.(model).table.Cursor() != 4 {
+		t.Errorf("down from web landed on row %d, want its port line", mm.(model).table.Cursor())
 	}
 
 	// A refresh that reorders the list keeps the cursor on web, not on row 3.
@@ -234,7 +253,6 @@ func TestGroupingAndCursor(t *testing.T) {
 
 	// The project heading is selectable and stands for the whole project.
 	m.table.SetCursor(2)
-	m.snap(1)
 	if it, proj, ok := m.sel(); !ok || it != nil || proj != "shop" || len(m.members(proj)) != 2 {
 		t.Errorf("heading selection = %v %q %v", it, proj, ok)
 	}

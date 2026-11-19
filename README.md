@@ -48,6 +48,7 @@ Containers tab:
 | `r` | restart |
 | `l` | logs |
 | `e` | shell (bash if present, else sh) |
+| `o` | open the port under the cursor in a browser (a container's own row: its first port) |
 
 System tab: `enter` runs the selected prune after a `y` confirmation, and `i` shows
 the full disk usage and engine info.
