@@ -3,6 +3,7 @@ package tui
 import (
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -377,5 +378,43 @@ func TestGraph(t *testing.T) {
 	cpu, mem, _ := m.series([]string{"a", "b"})
 	if len(cpu) != 2 || cpu[0] != 1 || cpu[1] != 13 || mem[1] != 24 {
 		t.Errorf("series should sum aligned on the newest sample: %v %v", cpu, mem)
+	}
+}
+
+func TestPreviewScroll(t *testing.T) {
+	m := containers()
+	m.h = 24 // just tall enough to split
+	m.layout()
+	m.table.SetCursor(3) // web
+	m.selKey = "w"
+	var rows []row
+	for i := range 30 {
+		rows = append(rows, row{fmt.Sprintf("k%02d", i), "v"})
+	}
+	m.preview = []section{{"Container", rows}}
+	press := func(k string) {
+		mm, _ := m.key(tea.KeyPressMsg{Text: k, Code: rune(k[0])})
+		m = mm.(model)
+	}
+
+	if v := m.leftView(); !strings.Contains(v, "J/K scroll · 1–") || strings.Contains(v, "k29") {
+		t.Fatalf("an overflowing pane should show its top and a footer:\n%s", v)
+	}
+	for range 100 {
+		press("J")
+	}
+	if v := m.leftView(); !strings.Contains(v, "k29") || m.previewOff != m.maxPreviewOff() {
+		t.Errorf("J should stop at the last line, off %d of %d:\n%s", m.previewOff, m.maxPreviewOff(), v)
+	}
+	if got := lipgloss.Height(m.View().Content); got != m.h {
+		t.Errorf("view is %d lines tall, want %d", got, m.h)
+	}
+	press("K")
+	if m.previewOff != m.maxPreviewOff()-1 {
+		t.Errorf("K should scroll back one line at once, off = %d", m.previewOff)
+	}
+	mm, _ := m.key(tea.KeyPressMsg{Code: tea.KeyUp})
+	if m = mm.(model); m.previewOff != 0 {
+		t.Errorf("a new selection should start at the top, off = %d", m.previewOff)
 	}
 }

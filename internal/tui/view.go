@@ -398,6 +398,38 @@ func (m model) previewView(w int) string {
 	return render(compact(m.preview), w)
 }
 
+// leftPane is the lower-left pane's content, one entry per line, and its inner size:
+// the selection's preview, or the System tab's summary.
+func (m model) leftPane() (lines []string, w, h int) {
+	w, h = m.w/2-4, m.h-3-m.top()-2 // -4, -2: frame and padding
+	s := m.previewView(w)
+	if m.tab == sysTab {
+		s = render(m.sysSecs(), w)
+	}
+	return strings.Split(strings.TrimRight(s, "\n"), "\n"), w, h
+}
+
+// maxPreviewOff is how far the lower-left pane can scroll: once it overflows, a footer takes a line.
+func (m model) maxPreviewOff() int {
+	lines, _, h := m.leftPane()
+	if len(lines) <= h {
+		return 0
+	}
+	return max(len(lines)-(h-1), 0)
+}
+
+// leftView is the lower-left pane scrolled to previewOff, with a footer once it overflows.
+func (m model) leftView() string {
+	lines, _, h := m.leftPane()
+	if len(lines) <= h || h < 2 {
+		return strings.Join(lines, "\n")
+	}
+	h-- // the footer
+	off := min(m.previewOff, len(lines)-h)
+	foot := faint.Render(fmt.Sprintf("J/K scroll · %d–%d of %d", off+1, off+h, len(lines)))
+	return strings.Join(lines[off:off+h], "\n") + "\n" + foot
+}
+
 // series sums the stats history of the given containers, aligned on the newest sample.
 func (m model) series(ids []string) (cpu, mem []float64, usage string) {
 	for _, id := range ids {
@@ -584,18 +616,18 @@ func (m model) View() tea.View {
 	help := hints("↑↓", "move", "/", "filter", "i", "inspect", "d", "delete", "p", "prune", "q", "quit")
 	switch m.tab {
 	case 0:
-		help = hints("↑↓", "move", "/", "filter", "s", "start/stop", "r", "restart", "l", "logs", "e", "shell", "o", "open", "i", "detail", "d", "delete", "p", "prune", "q", "quit")
+		help = hints("↑↓", "move", "/", "filter", "s", "start/stop", "r", "restart", "l", "logs", "e", "shell", "o", "open", "J/K", "scroll pane", "i", "detail", "d", "delete", "p", "prune", "q", "quit")
 	case sysTab:
-		help = hints("↑↓", "move", "/", "filter", "enter", "prune", "i", "info", "q", "quit")
+		help = hints("↑↓", "move", "/", "filter", "enter", "prune", "J/K", "scroll pane", "i", "info", "q", "quit")
 	}
 
 	body := frame.Render(m.table.View())
 	if m.split() {
 		bh := m.h - 3 - m.top()
 		lw := m.w / 2
-		left, right := m.previewView(lw-4), ""
+		left, right := m.leftView(), ""
 		if m.tab == sysTab {
-			left, right = render(m.sysSecs(), lw-4), m.eventsView(m.w-lw-4, bh-2)
+			right = m.eventsView(m.w-lw-4, bh-2)
 		} else {
 			right = m.graphsView(m.w-lw-4, bh-2)
 		}

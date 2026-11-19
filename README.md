@@ -36,6 +36,7 @@ current Docker context. Project-level actions need the `docker compose` plugin.
 | `tab` / `←` `→` / `1`–`5` | switch tab |
 | `/` | filter the list (`enter` to keep, `esc` to clear) |
 | `i` | full inspect popup |
+| `J` `K` / `shift+↓` `shift+↑` | scroll the lower-left pane (Containers and System tabs) |
 | `d` | delete, after a `y` confirmation |
 | `p` | prune unused items on this tab, after a `y` confirmation |
 | `q` | quit |
