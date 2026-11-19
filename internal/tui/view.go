@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"image/color"
 	"math"
@@ -194,7 +195,7 @@ func (m *model) setRows() {
 			if cpu, _, _ := m.series(m.ids(p)); len(cpu) > 0 {
 				row[slices.Index(t.cols, "CPU")] = fmt.Sprintf("%.1f%%", cpu[len(cpu)-1])
 			}
-			add(row, rowRef{"project:" + p, -1, p}, func(r table.Row) {
+			add(row, rowRef{"project:" + p, -1, p, nil}, func(r table.Row) {
 				r[0], r[state] = keyHint.Render(r[0]), st.Render(r[state])
 			})
 		}
@@ -226,11 +227,12 @@ func (m *model) setRows() {
 			row = append(row, v)
 		}
 		for n, e := range extra {
-			lead := row
+			lead, key := row, str(it[t.id])
 			if n > 0 {
 				lead, f = make(table.Row, len(row)), nil // port-only continuation line
+				key += " " + e[0]
 			}
-			add(append(slices.Clone(lead), e...), rowRef{str(it[t.id]), i, p}, f)
+			add(append(slices.Clone(lead), e...), rowRef{key, i, p, e}, f)
 		}
 	}
 
@@ -311,24 +313,30 @@ func (m model) sel() (it item, proj string, ok bool) {
 	return it, r.project, true
 }
 
-// snap keeps the cursor on a thing's first row: its extra port lines are not selectable.
-func (m *model) snap(prev int) {
-	c := m.table.Cursor()
-	if c < 0 || c >= len(m.rows) {
-		return
+// portURL is the address a browser should open for one of portLines' {container port, listener} rows.
+// shortcut: an all-interfaces listener becomes localhost, wrong for a remote docker context.
+func portURL(p table.Row) (string, error) {
+	if len(p) < 2 || p[0] == "" {
+		return "", errors.New("no ports")
 	}
-	key := m.rows[c].key
-	first := slices.IndexFunc(m.rows, func(r rowRef) bool { return r.key == key })
-	if c != first && c > prev { // moving down: skip to the next thing
-		for n := c; n < len(m.rows); n++ {
-			if m.rows[n].key != key {
-				first = n
-				break
-			}
-		}
+	ctr, host := p[0], p[1]
+	if host == "—" {
+		return "", errors.New(ctr + " is not published")
 	}
-	m.table.SetCursor(first)
-	m.selKey = m.rows[first].key
+	if !strings.HasSuffix(ctr, "/tcp") {
+		return "", errors.New(ctr + " is not a tcp port")
+	}
+	i := strings.LastIndex(host, ":")
+	addr, port := host[:max(i, 0)], host[i+1:]
+	port, _, _ = strings.Cut(port, "-") // a published range: its first port
+	if addr == "" || addr == "0.0.0.0" || addr == "[::]" {
+		addr = "localhost"
+	}
+	scheme := "http"
+	if n, _, _ := strings.Cut(strings.TrimSuffix(ctr, "/tcp"), "-"); n == "443" || n == "8443" {
+		scheme = "https"
+	}
+	return scheme + "://" + addr + ":" + port, nil
 }
 
 // members lists the containers of a Compose project.
@@ -576,7 +584,7 @@ func (m model) View() tea.View {
 	help := hints("↑↓", "move", "/", "filter", "i", "inspect", "d", "delete", "p", "prune", "q", "quit")
 	switch m.tab {
 	case 0:
-		help = hints("↑↓", "move", "/", "filter", "s", "start/stop", "r", "restart", "l", "logs", "e", "shell", "i", "detail", "d", "delete", "p", "prune", "q", "quit")
+		help = hints("↑↓", "move", "/", "filter", "s", "start/stop", "r", "restart", "l", "logs", "e", "shell", "o", "open", "i", "detail", "d", "delete", "p", "prune", "q", "quit")
 	case sysTab:
 		help = hints("↑↓", "move", "/", "filter", "enter", "prune", "i", "info", "q", "quit")
 	}
