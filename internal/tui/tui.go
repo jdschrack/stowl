@@ -101,11 +101,12 @@ type model struct {
 	logTS     bool
 	follow    bool // logs stay pinned to the newest line; scrolling up pauses it
 
-	preview []section           // inspect sections of the selected container
-	hist    map[string][]sample // stats history by container ID
-	statsCh <-chan statsMsg
-	df      []item // docker system df
-	info    item   // docker system info
+	preview    []section           // inspect sections of the selected container
+	previewOff int                 // lines the lower-left pane is scrolled down
+	hist       map[string][]sample // stats history by container ID
+	statsCh    <-chan statsMsg
+	df         []item // docker system df
+	info       item   // docker system info
 
 	events     *logStream // docker system events, running for the life of the program
 	eventLines []string
@@ -135,7 +136,7 @@ func (m model) act(label string, args ...string) (tea.Model, tea.Cmd) {
 }
 
 func (m model) switchTab(i int) (tea.Model, tea.Cmd) {
-	m.tab, m.items, m.filter, m.preview, m.selKey = i, nil, "", nil, ""
+	m.tab, m.items, m.filter, m.preview, m.selKey, m.previewOff = i, nil, "", nil, "", 0
 	m.layout()
 	return m, list(i)
 }
@@ -390,6 +391,14 @@ func (m model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.filter = ""
 		return m.applyFilter()
+	case "J", "shift+j", "shift+down": // scroll the lower-left pane; the table keeps ↑↓
+		if m.split() {
+			m.previewOff = min(m.previewOff+1, m.maxPreviewOff())
+		}
+		return m, nil
+	case "K", "shift+k", "shift+up":
+		m.previewOff = max(min(m.previewOff, m.maxPreviewOff())-1, 0)
+		return m, nil
 	case "p":
 		if t.prune != nil {
 			m.confirm = &action{"prune " + t.pruneWhat, t.prune}
@@ -470,6 +479,9 @@ func (m model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.table, cmd = m.table.Update(msg)
 	if c := m.table.Cursor(); c >= 0 && c < len(m.rows) {
+		if m.rows[c].key != m.selKey { // a new selection's pane starts at its top
+			m.previewOff = 0
+		}
 		m.selKey = m.rows[c].key
 	}
 	m.setRows() // the cursor may have moved; recolor around it
